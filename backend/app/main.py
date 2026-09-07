@@ -28,10 +28,13 @@ async def validation_exception_handler(request, exc):
 
 # Explicit origins are required when allow_credentials is enabled: a "*" wildcard
 # is rejected by browsers for credentialed requests.
+# Vercel generates a new *.vercel.app alias per deployment, so in addition to the
+# explicit CORS_ORIGINS list we allow any https://*.vercel.app origin.
 _origins_raw = os.getenv("CORS_ORIGINS", "http://localhost:5173,http://127.0.0.1:5173")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[o.strip() for o in _origins_raw.split(",") if o.strip()],
+    allow_origin_regex=r"^https://[a-z0-9.-]*\.vercel\.app$",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
