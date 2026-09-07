@@ -1,4 +1,5 @@
 import os
+from urllib.parse import urlsplit, urlunsplit, parse_qs, urlencode
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker
 
@@ -10,13 +11,41 @@ def normalize_db_url(url: str) -> str:
     return url
 
 
+def _strip_pg_query(url: str) -> str:
+    """Neon добавляет в DATABASE_URL параметры `sslmode`/`channel_binding`,
+    которые asyncpg не принимает как kwargs подключения — вырезаем их."""
+    if not url.startswith(("postgres://", "postgresql://")):
+        return url
+    parts = urlsplit(url)
+    qs = parse_qs(parts.query, keep_blank_values=True)
+    for key in ("sslmode", "channel_binding"):
+        qs.pop(key, None)
+    query = urlencode(qs, doseq=True) if qs else ""
+    base = urlunsplit((parts.scheme, parts.netloc, parts.path, "", parts.fragment))
+    return base + (("?" + query) if query else "")
+
+
+def _ssl_from_url(url: str):
+    """Эквивалент `sslmode=require` для asyncpg через connect_args."""
+    if not url.startswith(("postgres://", "postgresql://")):
+        return None
+    mode = parse_qs(urlsplit(url).query).get("sslmode", [None])[0]
+    if mode in (None, "disable"):
+        return None
+    return True
+
+
 # Use DATABASE_URL env var when provided; fallback to a local SQLite DB for
 # easy local startup without Postgres.
-DATABASE_URL = normalize_db_url(os.getenv("DATABASE_URL") or "sqlite+aiosqlite:///./dev.db")
+RAW_DATABASE_URL = os.getenv("DATABASE_URL") or "sqlite+aiosqlite:///./dev.db"
+DATABASE_URL = normalize_db_url(_strip_pg_query(RAW_DATABASE_URL))
 _engine_kwargs = {}
 if DATABASE_URL.startswith("postgres"):
     # Small pool: Neon/Supabase free tier ограничивает число подключений.
     _engine_kwargs = {"pool_size": 5, "max_overflow": 5}
+    ssl = _ssl_from_url(RAW_DATABASE_URL)
+    if ssl:
+        _engine_kwargs["connect_args"] = {"ssl": ssl}
 engine = create_async_engine(DATABASE_URL, future=True, echo=False, **_engine_kwargs)
 AsyncSessionLocal = async_sessionmaker(bind=engine, expire_on_commit=False)
 
