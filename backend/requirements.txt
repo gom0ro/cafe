@@ -1,0 +1,13 @@
+fastapi
+uvicorn[standard]
+SQLAlchemy>=1.4
+asyncpg
+alembic
+python-jose[cryptography]
+passlib[bcrypt]
+bcrypt==4.0.1
+pydantic
+redis
+aiofiles
+python-multipart
+aiosqlite
