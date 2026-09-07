@@ -1,0 +1,9 @@
+.venv/
+__pycache__/
+*.pyc
+dev.db
+dev.db-journal
+uploads/*
+!uploads/.gitkeep
+.env
+Dockerfile
