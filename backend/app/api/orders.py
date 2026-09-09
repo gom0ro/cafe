@@ -18,10 +18,11 @@ async def list_orders(
     limit: int = Query(100, ge=1, le=500),
     offset: int = Query(0, ge=0),
     status: Optional[str] = Query(None, description="Статусы через запятую, напр. new,kitchen,ready"),
+    table_id: Optional[int] = Query(None, description="Только заказы по конкретному столику"),
     db: AsyncSession = Depends(get_session),
     _=Depends(require_roles(["cashier", "waiter", "admin", "chef"]))):
     statuses = [s.strip() for s in status.split(",") if s.strip()] if status else None
-    return await crud.list_orders(db, limit=limit, offset=offset, statuses=statuses)
+    return await crud.list_orders(db, limit=limit, offset=offset, statuses=statuses, table_id=table_id)
 
 
 @router.get("/{order_id}", response_model=schemas.OrderOut)

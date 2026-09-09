@@ -47,14 +47,21 @@
           </div>
         </form>
       </article>
+
+      <TablesManager v-if="isAdmin" />
     </section>
   </div>
 </template>
 
 <script setup lang="ts">
-import { reactive, onMounted } from 'vue'
+import { reactive, computed, onMounted } from 'vue'
 import api from '../api'
 import UiIcon from '../components/UiIcon.vue'
+import TablesManager from '../components/TablesManager.vue'
+import { useAppStore } from '../stores'
+
+const store = useAppStore()
+const isAdmin = computed(() => store.user?.role === 'admin')
 
 const profile = reactive({
   full_name: '',

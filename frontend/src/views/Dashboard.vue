@@ -1,5 +1,8 @@
 <template>
   <div class="page">
+    <CashierDashboard v-if="isCashier" />
+
+    <template v-else>
     <section class="hero">
       <div>
         <div class="hero__eyebrow">
@@ -155,6 +158,7 @@
         </div>
       </aside>
     </section>
+    </template>
   </div>
 </template>
 
@@ -164,10 +168,13 @@ import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useAppStore } from '../stores'
 import api from '../api'
 import UiIcon from '../components/UiIcon.vue'
+import CashierDashboard from '../components/CashierDashboard.vue'
 import { chartThemeColors, watchThemeChange } from '../composables/useChartTheme'
 import { wsUrl } from '../ws'
 
 const appStore = useAppStore()
+
+const isCashier = computed(() => appStore.user?.role === 'cashier')
 
 const showMetrics = computed(() => appStore.dashboardPreferences.show_metrics !== false)
 const showActivity = computed(() => appStore.dashboardPreferences.show_activity !== false)
@@ -187,7 +194,7 @@ const greeting = computed(() => {
 const metrics = ref([
   {
     label: 'Выручка за день',
-    value: '₽0',
+    value: '₸0',
     meta: 'Загрузка…',
     icon: 'analytics',
     iconClass: 'metric__icon--green',
@@ -196,7 +203,7 @@ const metrics = ref([
   },
   {
     label: 'Выручка за месяц',
-    value: '₽0',
+    value: '₸0',
     meta: 'Цель: 0%',
     icon: 'dashboard',
     iconClass: 'metric__icon--olive',
@@ -214,7 +221,7 @@ const metrics = ref([
   },
   {
     label: 'Средний чек',
-    value: '₽0',
+    value: '₸0',
     meta: 'По продажам за сегодня',
     icon: 'inventory',
     iconClass: 'metric__icon--earth',
@@ -224,9 +231,9 @@ const metrics = ref([
 ])
 
 const formatCurrency = (n: number): string => {
-  if (n >= 1000000) return '₽' + (n / 1000000).toFixed(2).replace('.', ',') + 'M'
-  if (n >= 1000) return '₽' + Math.round(n).toLocaleString('ru-RU')
-  return '₽' + Math.round(n).toLocaleString('ru-RU')
+  if (n >= 1000000) return '₸' + (n / 1000000).toFixed(2).replace('.', ',') + 'M'
+  if (n >= 1000) return '₸' + Math.round(n).toLocaleString('ru-RU')
+  return '₸' + Math.round(n).toLocaleString('ru-RU')
 }
 
 async function loadStats() {
@@ -351,8 +358,8 @@ const chartData = ref({
 
 const activityItems = ref<Array<{ title: string; sub: string; icon: string; time: string }>>([])
 
-const goalRevenue = ref('₽0')
-const goalTarget = ref('₽500 000')
+const goalRevenue = ref('₸0')
+const goalTarget = ref('₸500 000')
 const goalPercent = ref(0)
 const topItems = ref<Array<{ name: string; qty: number; pct: number }>>([])
 const revenueByHour = ref<Array<{ label: string; value: number }>>([])
@@ -533,6 +540,7 @@ let categoryChartInstance: ReturnType<typeof echarts.init> | null = null
 let resizeObserver: ResizeObserver | null = null
 
 onMounted(() => {
+  if (isCashier.value) return
   const el = document.getElementById('chart')
   if (el) {
     chartInstance = echarts.init(el)

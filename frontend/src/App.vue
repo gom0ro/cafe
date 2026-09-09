@@ -171,6 +171,7 @@ const roleLabel = computed(() => {
 
 const navItems = [
   { to: '/', label: 'Дашборд', icon: 'dashboard' },
+  { to: '/floor', label: 'Зал', icon: 'coffee' },
   { to: '/pos', label: 'Касса', icon: 'pos' },
   { to: '/menu', label: 'Меню', icon: 'menu' },
   { to: '/staff', label: 'Персонал', icon: 'users' },
@@ -182,9 +183,9 @@ const navItems = [
 
 const visibleNav = computed(() => {
   const permissions: Record<string, string[]> = {
-    admin: ['/', '/pos', '/menu', '/staff', '/inventory', '/kitchen', '/analytics', '/settings'],
-    cashier: ['/', '/pos', '/menu', '/settings'],
-    waiter: ['/', '/pos', '/menu', '/settings'],
+    admin: ['/', '/floor', '/pos', '/menu', '/staff', '/inventory', '/kitchen', '/analytics', '/settings'],
+    cashier: ['/', '/floor', '/pos', '/menu', '/settings'],
+    waiter: ['/', '/floor', '/pos', '/menu', '/settings'],
     chef: ['/', '/inventory', '/kitchen', '/settings']
   }
   const allowed = permissions[role.value] || []

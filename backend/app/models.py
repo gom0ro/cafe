@@ -122,6 +122,30 @@ class Table(Base):
     is_active = Column(Boolean, default=True)
 
     orders = relationship("Order", back_populates="table")
+    bookings = relationship(
+        "TableBooking",
+        back_populates="table",
+        foreign_keys="TableBooking.table_id",
+        cascade="all, delete-orphan",
+    )
+
+
+class TableBooking(Base):
+    __tablename__ = "table_bookings"
+    id = Column(Integer, primary_key=True, index=True)
+    table_id = Column(Integer, ForeignKey("tables.id"), nullable=False, index=True)
+    linked_table_id = Column(Integer, ForeignKey("tables.id"), nullable=True, index=True)
+    customer_name = Column(String, nullable=True)
+    phone = Column(String, nullable=True)
+    guests = Column(Integer, default=1)
+    starts_at = Column(DateTime, nullable=False, index=True)
+    ends_at = Column(DateTime, nullable=True)
+    note = Column(Text, nullable=True)
+    status = Column(String, default="confirmed", index=True)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+
+    table = relationship("Table", primaryjoin="TableBooking.table_id==Table.id", back_populates="bookings")
+    linked_table = relationship("Table", primaryjoin="TableBooking.linked_table_id==Table.id")
 
 
 class Shift(Base):

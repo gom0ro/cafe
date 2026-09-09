@@ -24,7 +24,7 @@
           <label class="form-label">Цена</label>
           <div class="input-wrapper">
             <input v-model.number="form.price" required type="number" min="0" step="0.01" placeholder="0.00" class="input" />
-            <span class="currency-symbol">₽</span>
+            <span class="currency-symbol">₸</span>
           </div>
         </div>
         <div class="form-group">
@@ -125,7 +125,7 @@
             <label class="form-label">Цена</label>
             <div class="input-wrapper">
               <input v-model.number="editForm.price" required type="number" min="0" step="0.01" class="input" placeholder="0.00" />
-              <span class="currency-symbol">₽</span>
+              <span class="currency-symbol">₸</span>
             </div>
           </div>
           <div class="form-group">
@@ -230,7 +230,7 @@ const form = ref({
 })
 
 const formatPrice = (price: number): string => {
-  return price.toLocaleString('ru-RU') + ' ₽'
+  return price.toLocaleString('ru-RU') + ' ₸'
 }
 
 function pickFile() {

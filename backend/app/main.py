@@ -47,7 +47,7 @@ async def startup():
 
 
 # Import routers after app initialization to avoid circular imports
-from .api import auth, menu, orders, websocket as ws_module, staff, inventory, profile, dashboard, tables, shifts
+from .api import auth, menu, orders, websocket as ws_module, staff, inventory, profile, dashboard, tables, shifts, bookings
 
 app.include_router(auth.router, prefix="/api/auth", tags=["auth"])
 app.include_router(menu.router, prefix="/api/menu", tags=["menu"])
@@ -58,6 +58,7 @@ app.include_router(profile.router, prefix="/api/profile", tags=["profile"])
 app.include_router(dashboard.router, prefix="/api/dashboard", tags=["dashboard"])
 app.include_router(tables.router, prefix="/api/tables", tags=["tables"])
 app.include_router(shifts.router, prefix="/api/shifts", tags=["shifts"])
+app.include_router(bookings.router, prefix="/api/bookings", tags=["bookings"])
 
 # WebSocket route registered directly
 app.add_api_websocket_route("/ws/orders", ws_module.websocket_endpoint)

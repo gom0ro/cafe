@@ -74,7 +74,7 @@ class OrderOut(BaseModel):
 
 
 class TableCreate(BaseModel):
-    number: str
+    number: Optional[str] = None
     name: Optional[str] = None
     seats: int = 4
     zone: Optional[str] = None
@@ -91,6 +91,38 @@ class TableUpdate(BaseModel):
 class TableOut(TableCreate):
     id: int
     is_active: bool = True
+
+    class Config:
+        from_attributes = True
+
+
+class TableBookingCreate(BaseModel):
+    table_id: int
+    linked_table_id: Optional[int] = None
+    customer_name: Optional[str] = None
+    phone: Optional[str] = None
+    guests: int = 1
+    starts_at: datetime
+    ends_at: Optional[datetime] = None
+    note: Optional[str] = None
+
+
+class TableBookingUpdate(BaseModel):
+    table_id: Optional[int] = None
+    linked_table_id: Optional[int] = None
+    customer_name: Optional[str] = None
+    phone: Optional[str] = None
+    guests: Optional[int] = None
+    starts_at: Optional[datetime] = None
+    ends_at: Optional[datetime] = None
+    note: Optional[str] = None
+    status: Optional[str] = None
+
+
+class TableBookingOut(TableBookingCreate):
+    id: int
+    status: str = "confirmed"
+    created_at: Optional[datetime] = None
 
     class Config:
         from_attributes = True

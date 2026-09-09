@@ -1,6 +1,7 @@
 import { createRouter, createWebHistory } from 'vue-router'
 
 import Dashboard from '../views/Dashboard.vue'
+import Floor from '../views/Floor.vue'
 import POS from '../views/POS.vue'
 import Menu from '../views/Menu.vue'
 import Staff from '../views/Staff.vue'
@@ -15,6 +16,7 @@ import { useAppStore } from '../stores'
 const routes = [
   { path: '/login', name: 'Login', component: Login, meta: { public: true } },
   { path: '/', name: 'Dashboard', component: Dashboard, meta: { roles: ['admin', 'cashier', 'waiter', 'chef'] } },
+  { path: '/floor', name: 'Floor', component: Floor, meta: { roles: ['admin', 'cashier', 'waiter'] } },
   { path: '/pos', name: 'POS', component: POS, meta: { roles: ['admin', 'cashier', 'waiter'] } },
   { path: '/menu', name: 'Menu', component: Menu, meta: { roles: ['admin', 'cashier', 'waiter'] } },
   { path: '/staff', name: 'Staff', component: Staff, meta: { roles: ['admin'] } },
@@ -57,8 +59,8 @@ router.beforeEach(async (to) => {
   if (roles.length && appStore.user?.role && !roles.includes(appStore.user.role)) {
     const roleRedirects: Record<string, string> = {
       admin: '/',
-      cashier: '/pos',
-      waiter: '/pos',
+      cashier: '/floor',
+      waiter: '/floor',
       chef: '/kitchen'
     }
     return { path: roleRedirects[appStore.user.role] || '/' }

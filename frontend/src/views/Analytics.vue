@@ -23,7 +23,7 @@
       <section class="grid-cards grid-cards--3" style="margin-bottom: 1.5rem;">
         <article class="glass panel metric">
           <div class="metric__label">Выручка за неделю</div>
-          <h3 class="metric__value">₽{{ fmtMoney(weeklyRevenue) }}</h3>
+          <h3 class="metric__value">₸{{ fmtMoney(weeklyRevenue) }}</h3>
           <p class="metric__meta" :class="weekDelta >= 0 ? 'metric__meta--up' : 'metric__meta--down'">
             <UiIcon :name="weekDelta >= 0 ? 'trending-up' : 'trending-down'" :size="14" />
             <span>{{ weekDelta >= 0 ? '+' : '' }}{{ weekDelta }}% к прошлой неделе</span>
@@ -31,7 +31,7 @@
         </article>
         <article class="glass panel metric">
           <div class="metric__label">Средний чек</div>
-          <h3 class="metric__value">₽{{ fmtMoney(avgCheck) }}</h3>
+          <h3 class="metric__value">₸{{ fmtMoney(avgCheck) }}</h3>
           <p class="metric__meta">
             <span>По продажам за сегодня</span>
           </p>
@@ -72,7 +72,7 @@
                 <span>День</span>
               </div>
               <div class="item__sub">
-                <span class="success">Сегодня:</span> ₽{{ fmtMoney(revenueToday) }} · {{ dailyOrders }} заказов
+                <span class="success">Сегодня:</span> ₸{{ fmtMoney(revenueToday) }} · {{ dailyOrders }} заказов
               </div>
             </div>
             <div class="item">
@@ -99,7 +99,7 @@
                 <span>Выручка всего</span>
               </div>
               <div class="item__sub">
-                <span class="success">За всё время:</span> ₽{{ fmtMoney(revenueAll) }}
+                <span class="success">За всё время:</span> ₸{{ fmtMoney(revenueAll) }}
               </div>
             </div>
           </div>
@@ -183,7 +183,7 @@ function renderChart() {
       axisTick: { show: false }
     },
     series: [{
-      name: 'Выручка (руб)',
+      name: 'Выручка (₸)',
       data: weekValues.value,
       type: 'bar',
       barMaxWidth: 42,
@@ -245,13 +245,13 @@ async function loadStats() {
 function exportCSV() {
   const rows: Array<Array<string | number>> = [
     ['Отчёт по выручке'],
-    ['День', 'Выручка (₽)'],
+    ['День', 'Выручка (₸)'],
     ...weekLabels.value.map((l, i) => [l, weekValues.value[i] || 0]),
     [],
-    ['Средний чек (₽)', avgCheck.value],
+    ['Средний чек (₸)', avgCheck.value],
     ['Заказов за день', dailyOrders.value],
-    ['За сегодня (₽)', revenueToday.value],
-    ['За всё время (₽)', revenueAll.value]
+    ['За сегодня (₸)', revenueToday.value],
+    ['За всё время (₸)', revenueAll.value]
   ]
   const csv = rows.map((r) => r.map((v) => (v === '' ? '' : String(v).replace(';', ',')).trim()).join(';')).join('\r\n')
   const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' })

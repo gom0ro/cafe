@@ -125,9 +125,10 @@ async function login() {
 
     store.setToken(response.data.access_token, rememberMe.value)
 
-    const me = await api.get('/auth/me')
-
-    const profileResponse = await api.get('/profile/me')
+    const [me, profileResponse] = await Promise.all([
+      api.get('/auth/me'),
+      api.get('/profile/me')
+    ])
 
     store.setUser({
       id: me.data.id,
@@ -147,8 +148,8 @@ async function login() {
 
     const roleRedirects: Record<string, string> = {
       admin: '/',
-      cashier: '/pos',
-      waiter: '/pos',
+      cashier: '/floor',
+      waiter: '/floor',
       chef: '/kitchen'
     }
 

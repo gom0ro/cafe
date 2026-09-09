@@ -3,7 +3,7 @@ import os
 import datetime
 from typing import Optional
 from fastapi import HTTPException
-from sqlalchemy import select
+from sqlalchemy import select, or_
 from sqlalchemy.ext.asyncio import AsyncSession
 from . import models, schemas
 import redis.asyncio as aioredis
@@ -141,10 +141,12 @@ async def create_order(db: AsyncSession, order_in: schemas.OrderCreate, user_id:
     return order
 
 
-async def list_orders(db: AsyncSession, limit: int = 100, offset: int = 0, statuses: Optional[list[str]] = None):
+async def list_orders(db: AsyncSession, limit: int = 100, offset: int = 0, statuses: Optional[list[str]] = None, table_id: Optional[int] = None):
     q = select(models.Order)
     if statuses:
         q = q.where(models.Order.status.in_(statuses))
+    if table_id is not None:
+        q = q.where(models.Order.table_id == table_id)
     q = (
         q.options(selectinload(models.Order.items).selectinload(models.OrderItem.menu_item))
         .order_by(models.Order.created_at.desc())
@@ -178,6 +180,13 @@ async def update_order_status(db: AsyncSession, order_id: int, status: str, paym
     # Re-fetch with items eagerly loaded for response serialization
     order = await get_order(db, order.id)
     await add_audit_log(db, actor_id, f"order_{status}", "order", order.id, f"Заказ №{order.id} переведён в статус {status}")
+
+    # broadcast to connected websocket clients (in-process)
+    try:
+        await realtime.broadcast(json.dumps({"order_id": order.id, "status": order.status, "total": order.total}, ensure_ascii=False))
+    except Exception:
+        pass
+
     return order
 
 
@@ -189,11 +198,23 @@ async def list_tables(db: AsyncSession):
 
 
 async def create_table(db: AsyncSession, table: schemas.TableCreate):
-    db_table = models.Table(**table.dict())
+    data = table.dict()
+    if not data.get("number"):
+        data["number"] = await _next_table_number(db)
+    db_table = models.Table(**data)
     db.add(db_table)
     await db.commit()
     await db.refresh(db_table)
     return db_table
+
+
+async def _next_table_number(db: AsyncSession):
+    res = await db.execute(select(models.Table.number))
+    used = {n for n in res.scalars().all() if n and n.isdigit()}
+    n = 1
+    while str(n) in used:
+        n += 1
+    return str(n)
 
 
 async def update_table(db: AsyncSession, table_id: int, patch: schemas.TableUpdate):
@@ -212,7 +233,132 @@ async def delete_table(db: AsyncSession, table_id: int):
     table = await db.get(models.Table, table_id)
     if not table:
         return False
+    # Unlink historical orders so the FK constraint doesn't block deletion.
+    for o in (await db.execute(select(models.Order).where(models.Order.table_id == table_id))).scalars().all():
+        o.table_id = None
     await db.delete(table)
+    await db.commit()
+    return True
+
+
+# ------------------- Table bookings (reservations) -------------------
+
+async def _booking_overlap(db: AsyncSession, table_ids: list[int], starts_at, ends_at, exclude_id: Optional[int] = None):
+    q = select(models.TableBooking).where(
+        or_(
+            models.TableBooking.table_id.in_(table_ids),
+            models.TableBooking.linked_table_id.in_(table_ids),
+        ),
+        models.TableBooking.status == "confirmed",
+        models.TableBooking.starts_at < ends_at,
+        models.TableBooking.ends_at > starts_at,
+    )
+    if exclude_id is not None:
+        q = q.where(models.TableBooking.id != exclude_id)
+    res = await db.execute(q)
+    return res.scalars().first()
+
+
+def _table_capacity(db: AsyncSession, table: models.Table) -> int:
+    return table.seats if table.seats else 4
+
+
+async def _validate_booking(db: AsyncSession, table: models.Table, linked: Optional[models.Table], guests: int, starts, ends, exclude_id: Optional[int] = None):
+    table_ids = [table.id]
+    capacity = _table_capacity(db, table)
+    if linked:
+        table_ids.append(linked.id)
+        capacity += _table_capacity(db, linked)
+    if guests > capacity:
+        raise HTTPException(
+            status_code=422,
+            detail=f"Слишком много гостей для выбранных столиков — можно разместить не больше {capacity}",
+        )
+    if await _booking_overlap(db, table_ids, starts, ends, exclude_id=exclude_id):
+        raise HTTPException(status_code=409, detail="Столик уже забронирован на это время")
+
+
+async def list_bookings(db: AsyncSession, upcoming_only: bool = False):
+    q = select(models.TableBooking)
+    if upcoming_only:
+        q = q.where(models.TableBooking.starts_at >= datetime.datetime.utcnow())
+    q = q.order_by(models.TableBooking.starts_at.asc())
+    res = await db.execute(q)
+    return res.scalars().all()
+
+
+async def create_table_booking(db: AsyncSession, payload: schemas.TableBookingCreate):
+    table = await db.get(models.Table, payload.table_id)
+    if not table:
+        raise HTTPException(status_code=404, detail="Столик не найден")
+    linked = None
+    if payload.linked_table_id:
+        if payload.linked_table_id == payload.table_id:
+            raise HTTPException(status_code=422, detail="Доп. столик не должен совпадать с основным")
+        linked = await db.get(models.Table, payload.linked_table_id)
+        if not linked:
+            raise HTTPException(status_code=404, detail="Доп. столик не найден")
+    starts = payload.starts_at.replace(tzinfo=None)
+    ends = (payload.ends_at or (starts + datetime.timedelta(hours=2))).replace(tzinfo=None)
+    if ends <= starts:
+        raise HTTPException(status_code=422, detail="Конец брони должен быть позже начала")
+    await _validate_booking(db, table, linked, payload.guests, starts, ends)
+    booking = models.TableBooking(
+        table_id=payload.table_id,
+        linked_table_id=payload.linked_table_id,
+        customer_name=payload.customer_name,
+        phone=payload.phone,
+        guests=payload.guests,
+        starts_at=starts,
+        ends_at=ends,
+        note=payload.note,
+    )
+    db.add(booking)
+    await db.commit()
+    await db.refresh(booking)
+    return booking
+
+
+async def update_table_booking(db: AsyncSession, booking_id: int, patch: schemas.TableBookingUpdate):
+    booking = await db.get(models.TableBooking, booking_id)
+    if not booking:
+        return None
+    data = patch.dict(exclude_unset=True)
+    table_id = data.get("table_id", booking.table_id)
+    linked_id = data.get("linked_table_id", booking.linked_table_id)
+    table = await db.get(models.Table, table_id)
+    if not table:
+        raise HTTPException(status_code=404, detail="Столик не найден")
+    linked = None
+    if linked_id:
+        if linked_id == table_id:
+            raise HTTPException(status_code=422, detail="Доп. столик не должен совпадать с основным")
+        linked = await db.get(models.Table, linked_id)
+        if not linked:
+            raise HTTPException(status_code=404, detail="Доп. столик не найден")
+    guests = data.get("guests", booking.guests)
+    starts = (data.get("starts_at") or booking.starts_at).replace(tzinfo=None)
+    ends = (data.get("ends_at") or booking.ends_at or (starts + datetime.timedelta(hours=2))).replace(tzinfo=None)
+    if ends <= starts:
+        raise HTTPException(status_code=422, detail="Конец брони должен быть позже начала")
+    await _validate_booking(db, table, linked, guests, starts, ends, exclude_id=booking.id)
+    for k, v in data.items():
+        if v is not None:
+            setattr(booking, k, v)
+    booking.table_id = data.get("table_id", booking.table_id)
+    booking.linked_table_id = data.get("linked_table_id", booking.linked_table_id)
+    booking.starts_at = starts
+    booking.ends_at = ends
+    await db.commit()
+    await db.refresh(booking)
+    return booking
+
+
+async def delete_table_booking(db: AsyncSession, booking_id: int):
+    booking = await db.get(models.TableBooking, booking_id)
+    if not booking:
+        return False
+    await db.delete(booking)
     await db.commit()
     return True
 
@@ -633,4 +779,73 @@ async def get_dashboard_stats(db: AsyncSession):
         "revenue_by_category": revenue_by_category,
         "low_stock": low_stock,
         "top_items": top_items,
+    }
+
+
+# ------------------- Cashier dashboard (lightweight, day-focused) -------------------
+
+async def get_cashier_stats(db: AsyncSession):
+    now = datetime.datetime.utcnow()
+    today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+
+    paid_orders = (await db.execute(
+        select(models.Order).where(
+            models.Order.status == models.OrderStatus.paid.value,
+            models.Order.paid_at >= today_start,
+        )
+    )).scalars().all()
+
+    revenue_today = round(sum((o.total or 0) for o in paid_orders), 2)
+    orders_today = len(paid_orders)
+    avg_check = round(revenue_today / orders_today, 2) if orders_today else 0.0
+
+    payment_labels = {"cash": "Наличные", "card": "Карта", "other": "Другое"}
+    grouped = {}
+    for o in paid_orders:
+        m = o.payment_method or "other"
+        group = grouped.setdefault(m, {"method": m, "label": payment_labels.get(m, m), "value": 0.0, "count": 0})
+        group["value"] = round(group["value"] + (o.total or 0), 2)
+        group["count"] += 1
+    payments = sorted(grouped.values(), key=lambda g: g["value"], reverse=True)
+
+    active_q = await db.execute(
+        select(models.Order).where(
+            models.Order.status.in_([
+                models.OrderStatus.new.value,
+                models.OrderStatus.kitchen.value,
+                models.OrderStatus.ready.value,
+            ])
+        )
+    )
+    orders_by_table: dict = {}
+    for o in active_q.scalars().all():
+        if o.table_id is None:
+            continue
+        orders_by_table.setdefault(o.table_id, []).append(o)
+
+    open_tables = []
+    if orders_by_table:
+        tables = (await db.execute(
+            select(models.Table).where(models.Table.id.in_(list(orders_by_table)))
+        )).scalars().all()
+        for t in tables:
+            rows = orders_by_table[t.id]
+            open_tables.append({
+                "id": t.id,
+                "number": t.number,
+                "name": t.name,
+                "total": round(sum((o.total or 0) for o in rows), 2),
+                "orders": [
+                    {"order_id": o.id, "status": o.status, "total": round(o.total or 0, 2)}
+                    for o in sorted(rows, key=lambda x: x.created_at or datetime.datetime.min)
+                ],
+            })
+        open_tables.sort(key=lambda t: t["number"])
+
+    return {
+        "revenue_today": revenue_today,
+        "orders_today": orders_today,
+        "avg_check": avg_check,
+        "payments": payments,
+        "open_tables": open_tables,
     }

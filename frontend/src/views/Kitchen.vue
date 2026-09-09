@@ -114,6 +114,7 @@
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import api from '../api'
 import UiIcon from '../components/UiIcon.vue'
+import { tableLabel as tableLabelOf } from '../lib/tableLabel'
 import { useAppStore } from '../stores'
 import { wsUrl } from '../ws'
 
@@ -150,7 +151,7 @@ const busyId = ref<number | null>(null)
 const liveStatusText = ref('live sync')
 const liveStatusClass = ref('hero__chip--live')
 
-const formatMoney = (n: number): string => Math.round(n).toLocaleString('ru-RU') + ' ₽'
+const formatMoney = (n: number): string => Math.round(n).toLocaleString('ru-RU') + ' ₸'
 
 const statusLabels: Record<string, string> = {
   new: 'Новый',
@@ -176,7 +177,7 @@ const statusLabel = (status: string): string => statusLabels[status] || status
 function tableLabel(id?: number | null): string {
   if (!id) return 'Без столика'
   const t = tables.value.find((x) => x.id === id)
-  return t ? `Стол №${t.number}` : `Стол #${id}`
+  return t ? tableLabelOf(t) : `Стол #${id}`
 }
 
 const sortedOrders = computed(() =>

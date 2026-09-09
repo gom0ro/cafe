@@ -10,3 +10,8 @@ router = APIRouter()
 @router.get("/stats")
 async def dashboard_stats(db: AsyncSession = Depends(get_session), _=Depends(require_roles(["admin", "cashier", "waiter", "chef"]))):
     return await crud.get_dashboard_stats(db)
+
+
+@router.get("/cashier")
+async def cashier_stats(db: AsyncSession = Depends(get_session), _=Depends(require_roles(["cashier", "admin"]))):
+    return await crud.get_cashier_stats(db)
