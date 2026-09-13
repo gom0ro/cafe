@@ -210,10 +210,12 @@ html {
   font-size: 16px;
   scroll-behavior: smooth;
   scrollbar-gutter: stable;
+  touch-action: manipulation;
 }
 
 body {
   font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, Helvetica Neue, Arial, sans-serif;
+  touch-action: manipulation;
   color: var(--text);
   background: var(--body-bg);
   background-color: var(--body-bg-color);
